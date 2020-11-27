@@ -1,0 +1,553 @@
+# include <stdio.h>
+# include <stdlib.h>
+# include <iostream>
+# include <string.h>
+# include <fstream>
+# include <iomanip>
+# include <vector>
+# include <sstream>
+# include <algorithm>
+# include <map>
+
+using namespace std ;
+
+struct Token {
+  string tokenStr ;
+  int type ;
+  int value ;
+};
+
+class Hash {
+  vector<string> hashMap ;
+  
+  public :
+    void Init() {
+      hashMap.resize( 100 ) ;
+      for ( int i = 0 ; i < hashMap.size() ; i++ ) {
+	    hashMap[i] = "" ;
+      } // for
+	} // BuildHashMap()
+	
+    int Insert( string str ) ; // return token value
+    void Clear() {
+	  hashMap.clear() ;
+      Init() ;
+	} // Clear()
+
+  private :
+	int GetHashValue( string str ) ;
+};
+
+vector<string> GetTableData( string fileName, bool &isOpen ) ;
+bool IsDelimiter( char ch, vector<string> table4 ) ;
+string ToUpper( string str ) ;
+string ToLower( string str ) ;
+void UserFrame() ;
+void Pass1( int loc, map<strin, int> symbolTab ) ;
+void Pass2( map<strin, int> symbolTab ) ;
+string DecToHex( int decValue ) ;
+
+int main() {
+  string infileName, outfileName ; 
+  fstream infile, outfile ;
+  bool isOpen ;
+  vector< vector<string> > sicTable ; // table1, table2.......
+  Hash table5, table6, table7 ;
+  table5.Init() ;
+  table6.Init() ;
+  table7.Init() ; 
+  vector<Token> tokenTable ;
+  for ( int i = 0 ; i < 4 ; i++ ) {
+	stringstream ss ;
+    ss << i+1 ;
+    string temp ;
+    ss >> temp ;
+    sicTable.push_back( GetTableData( "SicTable/Table" + temp + ".table", isOpen ) ) ;
+  } // for 
+ 
+  // ------------------------up get table up-------------------------- 
+  string cmd ;
+  UserFrame() ;
+  cin >> cmd ;
+  while ( cmd != "1" && cmd != "3" ) {
+    UserFrame() ;
+    cin >> cmd ;	
+  } // while
+
+  while ( cmd != "3" ) {
+    cout << "\nEnter a input file:" ;
+    cin >> infileName ;
+    infile.open( ( infileName + ".txt" ).c_str(), fstream::in ) ;
+    while ( !infile.is_open() ) {
+	  cout << "\nCan not find the file\n" ;
+      cout << "Please enter again:" ;
+      cin >> infileName ;
+      infile.open( ( infileName + ".txt" ).c_str(), fstream::in ) ;
+    } // while
+
+    outfileName = infileName + "output.txt" ;
+    outfile.open( ( outfileName ).c_str(), fstream::out ) ;
+    // ----------------------- get token ----------------------------
+    tokenTable.clear() ;
+    table5.Clear() ;
+    table6.Clear() ;
+    table7.Clear() ; 
+    char cStr[256] ;
+    string buf, tokenStr ;
+    int pre, pos ;
+    int outputHeadIndex = 0 ;
+    
+  while ( infile.getline( cStr, 256, '\n' ) ) {
+    buf.assign( cStr ) ; 
+    buf = buf + "\n" ;
+	int bufIndex = 0 ;
+    pre = 1 ;
+    for ( pre = bufIndex ; bufIndex < buf.size() ; bufIndex++ ) {
+	  if ( IsDelimiter( buf[bufIndex], sicTable[3] ) ) {
+	    Token token ;
+	    pos = bufIndex ;
+	    // get token
+	    tokenStr = buf.substr( pre, pos-pre ) ;
+	    // put token into token table and hash table
+        // determine the token in which table
+        if ( tokenStr.size() != 0 && ( tokenStr != " "  || tokenStr != "\t" ||
+		                               tokenStr != "\n" || tokenStr != "." ) ) {
+          bool inTable = false ;
+          int sicTableIndex, sicTableIndex2 ;
+          for ( sicTableIndex = 0 ; !inTable && sicTableIndex < sicTable.size() ; sicTableIndex++ ) {
+            if ( sicTableIndex == 0 ) { // token toLower
+              tokenStr = ToLower( tokenStr ) ;
+			} //
+			
+			else if ( sicTableIndex == 3 )
+			  tokenStr = tokenStr ;
+			  
+			else { // token toupper
+			  tokenStr = ToUpper( tokenStr ) ;
+			} // else  
+			
+	        for ( sicTableIndex2 = 0 ; !inTable && sicTableIndex2 < sicTable[sicTableIndex].size() ; sicTableIndex2++ ) {
+	          if ( tokenStr == sicTable[sicTableIndex][sicTableIndex2] ) {
+	            inTable = true ;
+              } // if
+            } // for
+          } // for   
+
+          if ( buf[bufIndex] == '\'' && tokenStr.size() == 1 )
+            inTable = false ;
+          // if it in table1,2,3,4 then get its table num and value
+          if ( inTable ) {
+	        token.tokenStr = tokenStr ;
+            token.type = sicTableIndex ;
+            token.value = sicTableIndex2 ;
+          } // if
+          // if not,determine it is label,string or constant 
+          else { // not in table
+	        if ( buf[bufIndex] == '\'' ) { // table7 string
+	          pre = pos ; // 先處理第一個'，後處理字串內容 
+              if ( buf[bufIndex-1] != 'c' && buf[bufIndex-1] != 'C' &&
+                   buf[bufIndex-1] != 'x' && buf[bufIndex-1] != 'X' ) {
+	            string temp = "" ;
+                temp += buf[bufIndex-1] ;
+	            bool finded = false ;
+                int i, j ;
+	            for ( i = 0 ; i < sicTable.size() && !finded ; i++ ) {
+	              for ( j = 0 ; j < sicTable[i].size() && !finded ; j++ ) {
+                    if ( temp == sicTable[i][j])
+                      finded  = true ;
+                  } // for
+                } // for
+
+                token.tokenStr = temp ;
+                if ( finded ) {
+                  token.type = i ;
+                  token.value = j ;
+                } // if
+
+                else {
+	              if ( temp[0] >= '0' && temp[0] <= '9' ) {
+                    token.type = 6 ;
+                    token.value = table6.Insert( temp ) ;
+                  } // if
+
+                  else {
+                    token.type = 5 ;
+                    token.value = table5.Insert( temp ) ;
+                  } // else
+                } // else
+
+                tokenTable.push_back( token ) ;
+              } // if
+
+              bufIndex++ ;
+              token.tokenStr = buf.substr( pre, 1 ) ;
+              token.type = 4 ;
+              token.value = 9 ;
+              
+              tokenTable.push_back( token ) ;
+              if ( buf[bufIndex-2] == 'C' || buf[bufIndex-2] == 'c' )  
+                token.type = 7 ;
+ 
+              else if ( buf[bufIndex-2] == 'X' || buf[bufIndex-2] == 'x' )
+                token.type = 6 ;
+
+              pre++ ;
+              while ( bufIndex < buf.size() && buf[bufIndex] != '\'' ) {
+                bufIndex++ ;
+			  } // while
+			  
+              if ( bufIndex < buf.size() ) {
+	  		    pos = bufIndex ;
+			    tokenStr = buf.substr( pre, pos-pre ) ; // 切字串內容 
+	          
+                token.tokenStr = tokenStr ;
+                if ( token.type == 7 ) {
+	              token.value = table7.Insert( tokenStr ) ;
+	            } // if
+	            
+	            else { // token.type == 6
+	              token.value = table6.Insert( ToUpper( tokenStr ) ) ;
+				} // else
+              } // if
+
+              else
+                break ;
+            } // if
+
+            else {
+	          bool isConstant = true ;
+              for ( int j = 0 ; j < tokenStr.size() && isConstant ; j++ ) {
+	            if ( tokenStr[j] < '0' || tokenStr[j] > '9' ) {
+	              isConstant = false ;
+                } // if
+              } // for
+
+              if ( isConstant ) { // table6 constant
+	            token.tokenStr = tokenStr ;
+                token.type = 6 ;
+	            token.value = table6.Insert( tokenStr ) ;
+              } // if
+
+              else { // is label, table5
+                token.tokenStr = tokenStr ;
+                token.type = 5 ;
+	            token.value = table5.Insert( tokenStr ) ;
+              } // else
+            } // else
+          } // else
+          // put it into proper table and get its value
+          // (table1,2,3,4 are vector )
+          // (table5,6,7 are hash table) 
+          if ( token.tokenStr.size() != 0 )
+            tokenTable.push_back( token ) ;
+
+          pre = pos ;
+          // put dilimeter into token table
+          token.tokenStr = buf.substr( pre, 1 ) ;
+          if ( token.tokenStr == " " || token.tokenStr == "\t" || token.tokenStr == "\n" ) { // // skip white space
+            while ( bufIndex < buf.size() && ( buf[bufIndex] == ' ' || buf[bufIndex] == '\t' || token.tokenStr == "\n" ) ) {
+	          bufIndex++ ;
+			} // while
+			
+			pre = bufIndex ;
+		    bufIndex-- ;
+          } // if
+
+          else { 
+	        token.type = 4 ;
+            for ( int i = 0 ; i < sicTable[3].size() ; i++ ) {
+	          if ( token.tokenStr == sicTable[3][i] ) {
+	            token.value = i+1 ;
+                break ;
+              } // if
+            } // for
+
+            tokenTable.push_back( token ) ;
+            pre++ ;
+            if ( token.tokenStr == "." ) {
+              break ;
+            } // if 
+          } // else
+        } // if
+
+        else { // skip white sapce.
+          if ( buf[bufIndex] == ' ' || buf[bufIndex] == '\t' || buf[bufIndex] == '\n' ) {
+	        while ( bufIndex < buf.size() && ( buf[bufIndex] == ' ' || buf[bufIndex] == '\t' || buf[bufIndex] == '\n' ) ) {
+	          bufIndex++ ;
+	        } // while
+	      
+	        pre = bufIndex ;
+	        bufIndex-- ;
+          } // if
+
+          else {
+	        token.tokenStr = buf[bufIndex] ;
+	        token.type = 4 ;
+	        for ( int i = 0 ; i < sicTable[3].size() ; i++ ) {
+	          if ( token.tokenStr == sicTable[3][i] ) {
+	            token.value = i+1 ;
+                break ;
+              } // if
+            } // for
+
+            pre++ ;
+            tokenTable.push_back( token ) ;
+            if ( token.tokenStr == "." ) {
+              break ;
+            } // if
+          } // else
+        } // else
+      } // if
+    } // for
+    
+    int outputWalkIndex = outputHeadIndex ;
+    outfile << buf ;
+	
+	while ( outputWalkIndex < tokenTable.size() ) {
+	  if ( tokenTable[outputWalkIndex].value != -1 ) {
+        outfile << "(" << tokenTable[outputWalkIndex].type ;
+        outfile << "," << tokenTable[outputWalkIndex].value << ")" ; 
+      } // if
+      
+      else {
+        outfile << "(" << "error:table " << tokenTable[outputWalkIndex].type << "is full\n" << ")" ;
+	  } // else
+	  
+      outputWalkIndex++ ;
+	} // while
+	
+	if ( outputHeadIndex != outputWalkIndex ) {
+	  Token eol ;
+	  eol.tokenStr = "\n" ;
+	  eol.type = 0 ;
+	  eol.value = 0 ;
+	  tokenTable.push_back( eol ) ;
+	  outputWalkIndex++ ;
+	  outfile << endl ;
+	} // if
+	  
+	outputHeadIndex = outputWalkIndex ;
+  } // while
+
+    infile.close() ;
+    outfile.close() ;
+    cout << endl ; 
+    for ( int i = 0 ; i < tokenTable.size() ; i++ ) {
+      if ( tokenTable[i+1].tokenStr == "\n" ) {
+        cout << tokenTable[i].tokenStr << " " ;
+        i++ ;
+        cout << tokenTable[i].tokenStr ;
+	  } // if
+	  
+	  else 
+        cout << tokenTable[i].tokenStr << " " ;
+	}
+    UserFrame() ;
+    cin >> cmd ;
+    while ( cmd != "1" && cmd != "3" ) {
+      UserFrame() ;
+      cin >> cmd ;	
+    } // while
+  } // while
+
+  /* one pass
+  get line(token)
+  if ( opcode == start ) {
+    set starting address
+    get next line
+  }
+    
+  else
+    starting address = 0
+      
+  while ( opcode != END ) {
+    if ( is not a commend line ) {
+      if ( there is a symbol label ) {
+        check if is a duplicate symbol 
+        if ( is duplicate )
+          set error
+        else
+          put into symbol table ( plus address )
+      } // if
+      
+      get opcode 
+      search opTAB for opcode
+      if found {
+        add instruction length to loc
+      } // if
+      
+      else if ( opcode == 'word' ) {
+        add 3 to loc 
+      } // else if
+    } // if
+  } // while    
+  one pass */
+  
+  /* two pass 
+    if ( opcode == 'start' ) {
+      write assembly listing
+      read next input 
+    } // if
+    
+    while ( line != 'end' ) {
+      if ( is not a commend line ) {
+        search opTAB for opcode 
+        if ( found ) {
+          if ( there is a symbol in oprend field ) {
+		    search symbolTAB for operand
+			if ( found ) {
+			  store symbol value for operand address
+			} // if  
+			
+			else {
+			  set operand address as 0
+			  error:undefine symbol
+			} // else
+			
+			assemble the object code 
+		  } // if 
+        } // if
+        
+        else if ( opcode == 'BYTE' or 'WORD' ) {
+		  convert constant to object code
+		} else if 
+      } // if
+      
+      write listing line
+      read next input
+    } // while
+  two pass */ 
+} // main
+
+vector<string> GetTableData( string fileName, bool &isOpen ) {
+  isOpen = true ;
+  vector<string> myVec ;
+  fstream infile ;
+  infile.open( fileName.c_str(), fstream::in ) ;
+  if ( !infile.is_open() ) {
+	cout << "open " << fileName << " error\n" ;
+	isOpen = false ;
+  } //while
+
+  char cStr[256] ;
+  string temp ;
+  while ( infile.getline( cStr, 256, '\n' ) ) {
+    temp.assign( cStr ) ;
+    std::size_t found = temp.find_last_not_of( ' ' ) ;
+    if (found!=std::string::npos)
+      temp.erase(found+1) ;
+    else
+      temp.clear() ;
+
+    myVec.push_back( temp ) ;
+  } // while
+
+  return myVec ;
+} // GetTableData() 
+
+bool IsDelimiter( char ch, vector<string> table4 ) {
+  if ( ch == '\n' )
+    return true ;
+  else if ( ch == ' ' )
+    return true ;
+  else if ( ch == '\t')
+    return true ;
+  
+  bool isDelimiter = false ;
+  for ( int i = 0 ; i < table4.size() && !isDelimiter ; i++ ) {
+    if ( ch == table4[i][0] ) {
+      isDelimiter = true ;
+	} // if
+  } // for
+
+  return isDelimiter ;
+} // IsDelimiter()
+
+string ToUpper( string str ) {
+  for ( int i = 0 ; i < str.size() ; i++ ) {
+    str[i] = toupper( str[i] ) ;
+  } // for
+   
+  return str ;
+} // ToUpper
+
+string ToLower( string str ) {
+  for ( int i = 0 ; i < str.size() ; i++ ) {
+    str[i] = tolower( str[i] ) ;
+  } // for
+   
+  return str ;
+} // ToLower
+
+int Hash :: GetHashValue( string str ) {
+  int sum = 0, hashValue = 0 ;
+  for ( int i = 0 ; i < str.size() ; i++ ) {
+    sum += str[i] ;
+  } // for
+  
+  hashValue = sum % 100 ;
+  return hashValue ;
+} // GetHashValue()
+
+int Hash :: Insert( string str ) {
+  int key = GetHashValue( str ) ;
+  if ( hashMap[key] == "" ) { // put it in 
+    hashMap[key] = str ;
+  } // if
+  
+  else if ( hashMap[key] == str ) {
+    ;
+  } // else if
+  
+  else { // collision
+    int count = 0 ;
+    do {
+      count++ ;
+      key++ ;
+      if ( count == 100 ) {
+        key = -1 ;
+        break ;
+	  } // if
+      if ( key == hashMap.size() ) 
+        key = 0 ;
+ 
+      if ( hashMap[key] == str )
+        break ;
+	} while ( hashMap[key] != "" ) ;
+	
+	if ( key != -1 )
+      hashMap[key] = str ;
+  } // else
+  
+  return key ;
+} // Insert()
+
+void UserFrame() {
+  cout << "************************" << endl ;
+  cout << "*                      *" << endl ;
+  cout << "*     1.SIC            *" << endl ;
+  cout << "*     1.SIC/XE            *" << endl ;
+  cout << "*     3.quit           *" << endl ;
+  cout << "*                      *" << endl ;
+  cout << "************************" << endl ;
+  cout << "Input a command:" ;
+} // UserFrame()
+
+string DecToHex( int decValue ) {
+  string hexValue ;
+  int quotient, remainder ;
+  while ( decValue != 0 ) {
+    quotient = decValue / 16 ;
+    remainder = decValue % 16 ;
+    char temp = remainder + 48 ;
+    if ( remainder >= 10 ) {
+      temp += 7 ;
+	} //
+	
+    hexValue += temp ;
+    decValue = quotient ;
+  } // while
+  
+  reverse( hexValue.begin(), hexValue.end() ) ;
+  return hexValue ;
+} // DexToHex
