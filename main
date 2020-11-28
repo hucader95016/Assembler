@@ -46,7 +46,7 @@ void UserFrame() ;
 void Pass1( int loc, map<strin, int> symbolTab ) ;
 void Pass2( map<string, int> symbolTab ) ;
 string DecToHex( int decValue ) ;
-void GetOpcodeSet( vector<int> OpcodeTab ) ;
+vector<string> GetOpcodeSet() ;
 
 int main() {
   string infileName, outfileName ; 
