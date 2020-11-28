@@ -44,8 +44,9 @@ string ToUpper( string str ) ;
 string ToLower( string str ) ;
 void UserFrame() ;
 void Pass1( int loc, map<strin, int> symbolTab ) ;
-void Pass2( map<strin, int> symbolTab ) ;
+void Pass2( map<string, int> symbolTab ) ;
 string DecToHex( int decValue ) ;
+void GetOpcodeSet( vector<int> OpcodeTab ) ;
 
 int main() {
   string infileName, outfileName ; 
@@ -551,3 +552,23 @@ string DecToHex( int decValue ) {
   reverse( hexValue.begin(), hexValue.end() ) ;
   return hexValue ;
 } // DexToHex
+
+vector<string> GetOpcodeSet() {
+  fstream infile ;
+  vector<string> opcodeTab ;
+  infile.open( "SicTable/Opcode.table", fstream::in ) ;
+  if ( !infile.isopen() )
+    cout << "Opcode Table read error\n" ;
+
+  else {
+	char cStr[256] ;
+    int i = 0 ;
+	while ( infile.getline( cStr, 256, '\n' ) ) {
+	  opcodeTab[i].assign( cStr ) ;
+      i++ ;
+    } // while
+  } // else
+
+  return opcodeTab ;
+} // GetOpcodeSet()
+
