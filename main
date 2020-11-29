@@ -43,15 +43,14 @@ bool IsDelimiter( char ch, vector<string> table4 ) ;
 string ToUpper( string str ) ;
 string ToLower( string str ) ;
 void UserFrame() ;
-void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable, int loc, map<string, int> symbolTable ) ;
-void Pass2( map<string, int> symbolTab ) ;
+void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable, map<string, int> &symbolTable ) ;
+vector<string> Pass2( vector<Token> tokenTable, map<string, int> symbolTable, vector<string> opTable ) ;
 string DecToHex( int decValue ) ;
 int HexToDec( string hexValue ) ;
 vector<string> GetOpcodeSet() ;
-void GetTokenLine( vector<Token> tokenTable, int &begin, int &end, int line ) ; // use begin and end to specified a line
+void GetTokenLine( vector<Token> tokenTable, int &begin, int &end, int &line ) ; // use begin and end to specified a line
 void ClassifyToken( vector<Token> tokenTable, int begin, int end,
-                    string &label, string &opcode, int &x, string &addr ) ;
-bool FoundSymbol( map<string, int> symbolTable ) ;
+                    Token &label, Token &opcode, bool &x, Token &addr )  ;
 bool IsPseudo( vector<string> sicTable, string opcode ) ;
 
 int main() {
@@ -151,7 +150,7 @@ int main() {
           // if not,determine it is label,string or constant 
           else { // not in table
 	        if ( buf[bufIndex] == '\'' ) { // table7 string
-	          pre = pos ; // 先處理第一個'，後處理字串內容 
+	          pre = pos ; // ¥ý³B²z²Ä¤@­Ó'¡A«á³B²z¦r¦ê¤º®e 
               if ( buf[bufIndex-1] != 'c' && buf[bufIndex-1] != 'C' &&
                    buf[bufIndex-1] != 'x' && buf[bufIndex-1] != 'X' ) {
 	            string temp = "" ;
@@ -205,7 +204,7 @@ int main() {
 			  
               if ( bufIndex < buf.size() ) {
 	  		    pos = bufIndex ;
-			    tokenStr = buf.substr( pre, pos-pre ) ; // 切字串內容 
+			    tokenStr = buf.substr( pre, pos-pre ) ; // ¤Á¦r¦ê¤º®e 
 	          
                 token.tokenStr = tokenStr ;
                 if ( token.type == 7 ) {
@@ -308,18 +307,7 @@ int main() {
     } // for
     
     int outputWalkIndex = outputHeadIndex ;
-    outfile << buf ;
-	
 	while ( outputWalkIndex < tokenTable.size() ) {
-	  if ( tokenTable[outputWalkIndex].value != -1 ) {
-        outfile << "(" << tokenTable[outputWalkIndex].type ;
-        outfile << "," << tokenTable[outputWalkIndex].value << ")" ; 
-      } // if
-      
-      else {
-        outfile << "(" << "error:table " << tokenTable[outputWalkIndex].type << "is full\n" << ")" ;
-	  } // else
-	  
       outputWalkIndex++ ;
 	} // while
 	
@@ -330,12 +318,22 @@ int main() {
 	  eol.value = 0 ;
 	  tokenTable.push_back( eol ) ;
 	  outputWalkIndex++ ;
-	  outfile << endl ;
 	} // if
 	  
 	outputHeadIndex = outputWalkIndex ;
   } // while
 
+    vector<string> opTable, assemblyListing ;
+    map<string, int> symbolTable ;
+    opTable = GetOpcodeSet() ;
+    
+    Pass1( sicTable, tokenTable, symbolTable ) ;
+    assemblyListing = Pass2( tokenTable, symbolTable, opTable ) ;
+    
+    for( int i = 0 ; i < assemblyListing.size() ; i++ ) {
+      cout << assemblyListing[i] << endl ;
+	} // for
+	
     infile.close() ;
     outfile.close() ;
     cout << endl ; 
@@ -346,74 +344,6 @@ int main() {
       cin >> cmd ;	
     } // while
   } // while
-
-  /* one pass
-  get line(token)
-  if ( opcode == start ) {
-    set starting address
-    get next line
-  }
-    
-  else
-    starting address = 0
-      
-  while ( opcode != END ) {
-    if ( is not a commend line ) {
-      if ( there is a symbol label ) {
-        check if is a duplicate symbol 
-        if ( is duplicate )
-          set error
-        else
-          put into symbol table ( plus address )
-      } // if
-      
-      get opcode 
-      search opTAB for opcode
-      if found {
-        add instruction length to loc
-      } // if
-      
-      else if ( opcode == 'word' ) {
-        add 3 to loc 
-      } // else if
-    } // if
-  } // while    
-  one pass */
-  
-  /* two pass 
-    if ( opcode == 'start' ) {
-      write assembly listing
-      read next input 
-    } // if
-    
-    while ( line != 'end' ) {
-      if ( is not a commend line ) {
-        search opTAB for opcode 
-        if ( found ) {
-          if ( there is a symbol in oprend field ) {
-		    search symbolTAB for operand
-			if ( found ) {
-			  store symbol value for operand address
-			} // if  
-			
-			else {
-			  set operand address as 0
-			  error:undefine symbol
-			} // else
-			
-			assemble the object code 
-		  } // if 
-        } // if
-        
-        else if ( opcode == 'BYTE' or 'WORD' ) {
-		  convert constant to object code
-		} else if 
-      } // if
-      
-      write listing line
-      read next input
-    } // while
-  two pass */ 
 } // main
 
 vector<string> GetTableData( string fileName, bool &isOpen ) {
@@ -586,50 +516,49 @@ vector<string> GetOpcodeSet() {
   return opcodeTab ;
 } // GetOpcodeSet()
 
-void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable, int loc, map<string, int> symbolTable ) {
-  int startingAddr = 0, line = 0 ; ;
+void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable, map<string, int> &symbolTable ) {
+  int loc = 0, line = 0 ; ;
   int begin = 0, end = 0 ;
-  string label, opcode, address ;
-  int x = 0 ;
+  Token label, opcode, address ;
+  bool x = false ;
   GetTokenLine( tokenTable, begin, end, line ) ;
   ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
 
-  while ( opcode == "." ) { // 讀掉開頭的註解 
+  while ( opcode.tokenStr == "." ) { // Åª±¼¶}ÀYªºµù¸Ñ 
     GetTokenLine( tokenTable, begin, end, line ) ;
     ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
   } // while
 
-  if ( opcode == "START" ) {
-	startingAddr = HexToDec( address ) ;
+  if ( opcode.tokenStr == "START" ) {
+	loc = HexToDec( address.tokenStr ) ;
+	symbolTable.insert( std :: pair<string, int>( label.tokenStr, loc ) ) ;
     GetTokenLine( tokenTable, begin, end, line ) ;
   } // if
 
   else 
-    startingAddr = 0 ;
+    loc = 0 ;
   
   ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
-  while ( opcode != "END" ) {
-	if ( opcode != "." ) {
-	  if ( label != "" ) { // has symbol
-        if ( FoundSymbol( symbolTable ) ) {
-	      cout << "line:" << line << " duplicate define symbol!\n" ; 
+  while ( opcode.tokenStr != "END" ) {
+  
+    cout << label.tokenStr << " " << opcode.tokenStr << " " << address.tokenStr << endl ;
+    system( "pause" ) ;
+    
+	if ( opcode.tokenStr != "." ) {
+	  if ( label.tokenStr != "" ) { // has symbol
+        if ( symbolTable.find( label.tokenStr ) != symbolTable.end() ) {
+	      cout << "error:line" << line << " duplicate define symbol!\n" ; 
         } // if
 
         else {
-	      symbolTable.insert( std :: pair<string, int>( label, loc ) ) ;
+	      symbolTable.insert( std :: pair<string, int>( label.tokenStr, loc ) ) ;
         } // else
       } // if
 
-      if ( opcode == "" )
-        cout << "line:" << line << " vaild opcode\n" ;
+      if ( opcode.tokenStr == "" )
+        cout << "error:line" << line << " vaild opcode\n" ;
       else {
-	    if ( !IsPseudo( sicTable[1], opcode ) )
- 	      loc = loc + 3 ;
-
-        else {
-	      if ( opcode == "WORD" )
-            loc = loc + 3 ;
-        } // else
+	    loc = loc + 3 ;
       } // else    
     } // if
 
@@ -670,8 +599,118 @@ void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable, int loc
   one pass */
 } // Pass1()
 
+vector<string> Pass2( vector<Token> tokenTable, map<string, int> symbolTable, vector<string> opTable ) {
+  int loc = 0, line = 0 ; ;
+  int begin = 0, end = 0 ;
+  Token label, opcode, address ;
+  bool x = false ;
+  vector<string> assemblyListing ;
+  GetTokenLine( tokenTable, begin, end, line ) ;
+  ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  
+  while ( opcode.tokenStr == "." ) { // Åª±¼¶}ÀYªºµù¸Ñ 
+    GetTokenLine( tokenTable, begin, end, line ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  } // while
+
+  if ( opcode.tokenStr == "START" ) {
+	assemblyListing.push_back( "" ) ;
+  } // if
+  
+  while ( opcode.tokenStr != "END" ) { // §PÂ_¦¡§ï¦¨tokenTable[begin] != "END" 
+    if ( opcode.tokenStr != "." ) {
+      if ( opcode.tokenStr != "" ) {
+        if ( opcode.tokenStr == "WORD" || opcode.tokenStr == "BYTE" ) {
+          // X'F1' or 3 or C'EOF'
+          if ( address.tokenStr == "EOF" ) 
+            assemblyListing.push_back( "454F46" ) ;
+          else {
+            if ( opcode.tokenStr == "BYTE" ) {
+              assemblyListing.push_back( address.tokenStr ) ;
+			} // if
+			
+			else {
+			  string tempAddr ;
+			  stringstream ss ;
+              ss << address.tokenStr ;
+              int temp ;
+              ss >> temp ;
+              tempAddr = DecToHex( temp ) ;
+              temp = 6 - tempAddr.size() ;
+              while (  temp > 0 ) {
+                tempAddr = "0" + tempAddr ;
+                temp-- ;
+			  } // while
+			  
+			  assemblyListing.push_back( tempAddr ) ;
+			} // else
+		  } // else
+		} // if
+		
+		else {
+		  string tempAddr ;
+		  if ( address.tokenStr != "" ) { // has operand
+		    if ( x ) 
+		      tempAddr = DecToHex( ( symbolTable.find( address.tokenStr ) -> second ) + 32768 ) ; // nibble
+			else
+			  tempAddr = DecToHex( symbolTable.find( address.tokenStr ) -> second ) ;
+		  } // if 
+		  
+		  else { 
+		    cout << "error:line" << line << " undefine symbol\n" ;
+		    tempAddr = "0000" ;
+		  } // else
+		  
+		  string tempListing = opTable[opcode.value] + tempAddr ;
+		  assemblyListing.push_back( tempListing ) ;
+		} // else
+	  } // if
+	} // if
+	
+	GetTokenLine( tokenTable, begin, end, line ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  } // while
+  
+  return assemblyListing ;
+  
+  /* if ( opcode == 'start' ) {
+      write assembly listing
+      read next input 
+    } // if
+    
+    while ( line != 'end' ) {
+      if ( is not a commend line ) {
+        search opTAB for opcode 
+        if ( found ) {
+          if ( there is a symbol in oprend field ) {
+		    search symbolTAB for operand
+			if ( found ) {
+			  store symbol value for operand address
+			} // if  
+			
+			else {
+			  set operand address as 0
+			  error:undefine symbol
+			} // else
+			
+			assemble the object code 
+		  } // if 
+        } // if
+        
+        else if ( opcode == 'BYTE' or 'WORD' ) {
+		  convert constant to object code
+		} else if 
+      } // if
+      
+      write listing line
+      read next input
+    } // while
+  two pass */ 
+} // Pass2()
+
 void GetTokenLine( vector<Token> tokenTable, int &begin, int &end, int &line ) {  // use begin and end to specified a line
   begin = end ;
+  end++ ;
   while( tokenTable[end].tokenStr != "\n" )
     end++ ;
 
@@ -679,33 +718,33 @@ void GetTokenLine( vector<Token> tokenTable, int &begin, int &end, int &line ) {
 } // GetTokenLine()
 
 void ClassifyToken( vector<Token> tokenTable, int begin, int end,
-                    string &label, string &opcode, int &x, string &addr ) {
+                    Token &label, Token &opcode, bool &x, Token &addr ) {
   int i = begin ;
   bool isComment = false ;
-  label = "" ;
-  opcode = "" ;
-  addr = "" ;
+  label.tokenStr = "" ;
+  opcode.tokenStr = "" ;
+  addr.tokenStr = "" ;
   x = 0 ;
   if ( tokenTable[i].type == 5 ) {
-      label = tokenTable[i].tokenStr ;
+      label = tokenTable[i] ;
       i++ ;
   } // if
 
   else if ( tokenTable[i].tokenStr == "." ) {
-	opcode = "." ;
+	opcode = tokenTable[i] ;
     isComment = true ;
   } // else if
 
   if ( !isComment ) {
     for ( ; i < end ; i++ ) {
 	  if ( tokenTable[i].type == 1 || tokenTable[i].type == 2 )
-        opcode = tokenTable[i].tokenStr ;
+        opcode = tokenTable[i] ;
 
       else if ( tokenTable[i].type == 3 )
-        x = 1 ;
+        x = true ;
 
-      else if ( tokenTable[i].type != 4 )
-        addr = tokenTable[i].tokenStr ;
+      else if ( tokenTable[i].type != 4 ) // table 5,6,7
+        addr = tokenTable[i] ;
     } // for
   } // if
 } // ClassifyToken
