@@ -61,7 +61,7 @@ int HexToDec( string hexValue ) ;
 map<string, pair<string, int> > GetOpcodeSet() ;
 void GetTokenLine( vector<Token> tokenTable, int &begin, int &end, int &line ) ; // use begin and end to specified a line
 void ClassifyToken( vector<Token> tokenTable, int begin, int end,
-                    Token &label, Token &opcode, bool &x, Token &addr )  ;
+                    Token &label, Token &opcode, bool &e, bool &x, char &addrMod, Token &op1, Token&op2 ) ;
 bool IsPseudo( vector<string> sicTable, string opcode ) ;
 void OutputResult( vector<OutputToken> outputTokenList, fstream &outfile ) ;
 void Pass1XE( vector< vector<string> > sicTable, vector<Token> tokenTable,
@@ -519,25 +519,6 @@ int HexToDec( string hexValue ) {
 } // HexToDec()
 
 map<string, pair<string, int> > GetOpcodeSet() {
-  /*fstream infile ;
-  vector<string> opcodeTab ;
-  infile.open( "SicTable/Opcode.table", fstream::in ) ;
-  if ( !infile.is_open() )
-    cout << "Opcode Table read error\n" ;
-
-  else {
-	char cStr[256] ;
-    string buf ;
-    int i = 0 ;
-	while ( infile.getline( cStr, 256, '\n' ) ) {
-	  buf.assign( cStr ) ;
-	  opcodeTab.push_back( buf ) ;
-      i++ ;
-    } // while
-  } // else
-
-  return opcodeTab ;*/ 
-
   string mnemonic[100] = { "ADD","ADDF","ADDR","AND","CLEAR","COMP","COMPF","COMPR","DIV","DIVF","DIVR","FIX",
                            "FLOAT","HIO","J","JEQ","JGT","JLT","JSUB","LDA","LDB","LDCH","LDF","LDL","LDS","LDT","LDX","LPS",
                            "MUL" ,"MULF","MULR","NORM","OR","RD","RMO","RSUB","SHIFTL","SHIFTR","SIO","SSK","STA",
@@ -568,9 +549,12 @@ void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable,
   int loc = 0, line = 0, sourceLineCount = 0 ;
   int begin = 0, end = -1 ;
   Token label, opcode, address ;
-  bool x = false ;
+  Token uselessToken ; 
+  bool x = false,  uselessBool ;
+  char uselessChar ; 
   GetTokenLine( tokenTable, begin, end, line ) ;
-  ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
   while ( outputTokenList[sourceLineCount].source == "" ) 
     sourceLineCount++ ;
 
@@ -578,7 +562,8 @@ void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable,
     outputTokenList[sourceLineCount].line = line ;
     sourceLineCount++ ;
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
     while ( outputTokenList[sourceLineCount].source == "" ) 
       sourceLineCount++ ;
   } // while
@@ -595,7 +580,8 @@ void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable,
   else 
     loc = 0 ;
   
-  ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
   while ( opcode.tokenStr != "END" ) {
 	while ( outputTokenList[sourceLineCount].source == "" ) 
       sourceLineCount++ ;
@@ -663,7 +649,8 @@ void Pass1( vector< vector<string> > sicTable, vector<Token> tokenTable,
     } // else
 
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
   } // while
 
   outputTokenList[sourceLineCount].line = line ; // END
@@ -706,23 +693,28 @@ void Pass2( vector<Token> tokenTable, map<string, int> symbolTable,
   int loc = 0, line = 0, sourceLineCount = 0 ;
   int begin = -1, end = -1 ;
   Token label, opcode, address ;
-  bool x = false ;
+  Token uselessToken ; 
+  bool x = false,  uselessBool ;
+  char uselessChar ; 
   GetTokenLine( tokenTable, begin, end, line ) ;
-  ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
   while ( outputTokenList[sourceLineCount].source == "" ) 
     sourceLineCount++ ;
   
   while ( opcode.tokenStr == "." ) { // Aa±??}AYaoμu﹐N 
     sourceLineCount++ ;
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
   } // while
 
   if ( opcode.tokenStr == "START" ) {
     outputTokenList[sourceLineCount].machineCode = "" ;
     sourceLineCount++ ;
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
   } // if
   
   while ( opcode.tokenStr != "END" ) { // §PA_|!§i|‥tokenTable[begin] != "END" 
@@ -783,17 +775,18 @@ void Pass2( vector<Token> tokenTable, map<string, int> symbolTable,
 		} // else
 	  } // if
   
-      else {
+      else { // opcode == ""
         outputTokenList[sourceLineCount].machineCode = "" ;
       } // else
  	} // if
 	
-    else {
+    else { // common-line
 	  outputTokenList[sourceLineCount].machineCode = "" ;
     } // else
 
 	GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, uselessBool,
+                 x, uselessChar, address, uselessToken ) ;
     sourceLineCount++ ;
   } // while
   
@@ -842,13 +835,16 @@ void GetTokenLine( vector<Token> tokenTable, int &begin, int &end, int &line ) {
 } // GetTokenLine()
 
 void ClassifyToken( vector<Token> tokenTable, int begin, int end,
-                    Token &label, Token &opcode, bool &x, Token &addr ) {
+                    Token &label, Token &opcode, bool &e, bool &x, char &addrMod, Token &op1, Token&op2 ) {
   int i = begin ;
   bool isComment = false ;
   label.tokenStr = "" ;
   opcode.tokenStr = "" ;
-  addr.tokenStr = "" ;
-  x = 0 ;
+  e = false ;
+  x = false ;
+  addrMod = '\0' ;
+  op1.tokenStr = "" ;
+  op2.tokenStr = "" ;
   if ( tokenTable[i].type == 5 ) {
       label = tokenTable[i] ;
       i++ ;
@@ -864,11 +860,41 @@ void ClassifyToken( vector<Token> tokenTable, int begin, int end,
 	  if ( tokenTable[i].type == 1 || tokenTable[i].type == 2 )
         opcode = tokenTable[i] ;
 
-      else if ( tokenTable[i].type == 3 )
+      else if ( tokenTable[i].tokenStr == "X" ) {
         x = true ;
+      } // else if
 
-      else if ( tokenTable[i].type != 4 ) // table 5,6,7
-        addr = tokenTable[i] ;
+      else if ( tokenTable[i].type == 4 ) {
+	    if ( tokenTable[i].tokenStr == "+" ) {
+	      e = true ;
+        } // if
+
+        else if (tokenTable[i].tokenStr == "@"  ) {
+	      addrMod = '@' ;
+        } // else if
+
+        else if (tokenTable[i].tokenStr == "#"  ) {
+	      addrMod = '#' ;
+        } // else if
+ 
+        else if (tokenTable[i].tokenStr == "="  ) {
+	      addrMod = '=' ;
+        } // else if
+      } // else if
+
+      else { // table 5,6,7
+        if ( op1.tokenStr == "" ) {
+	      op1 = tokenTable[i] ;
+        } // if
+
+        else if ( op2.tokenStr == "" ) {
+	      op2 = tokenTable[i] ;
+        } // else if
+
+        else {
+	      cout << "error message:too many operand(function classifyToken)\n" ;
+        } // else
+      } // else
     } // for
   } // if
 } // ClassifyToken
@@ -908,10 +934,13 @@ void Pass1XE( vector< vector<string> > sicTable, vector<Token> tokenTable,
             map<string, int> &symbolTable, vector<OutputToken> &outputTokenList )  {
   int loc = 0, line = 0, sourceLineCount = 0 ;
   int begin = 0, end = -1 ;
-  Token label, opcode, address ;
-  bool x = false ;
+  Token label, opcode ;
+  Token op1, op2 ;
+  bool x = false, e = false  ;
+  char addrMod = '\0' ;
   GetTokenLine( tokenTable, begin, end, line ) ;
-  ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                 x, addrMod, op1, op2 ) ;
   while ( outputTokenList[sourceLineCount].source == "" ) 
     sourceLineCount++ ;
 
@@ -919,7 +948,8 @@ void Pass1XE( vector< vector<string> > sicTable, vector<Token> tokenTable,
     outputTokenList[sourceLineCount].line = line ;
     sourceLineCount++ ;
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                   x, addrMod, op1, op2 ) ;
     while ( outputTokenList[sourceLineCount].source == "" ) 
       sourceLineCount++ ;
   } // while
@@ -936,7 +966,8 @@ void Pass1XE( vector< vector<string> > sicTable, vector<Token> tokenTable,
   else 
     loc = 0 ;
   
-  ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+ ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                x, addrMod, op1, op2 ) ;
   while ( opcode.tokenStr != "END" ) {
 	while ( outputTokenList[sourceLineCount].source == "" ) 
       sourceLineCount++ ;
@@ -994,17 +1025,24 @@ void Pass1XE( vector< vector<string> > sicTable, vector<Token> tokenTable,
         } // else
       } // else if
 
-      else {
-	    loc = loc + 3 ;
+      else { 
+	    if ( e ) { // format 4
+	      loc += 4 ;
+        } // if
+
+        else {
+	      loc += instructionSet.find( opcode.tokenStr ) -> second.second ;
+        } // else
       } // else    
     } // if
 
-    else { // comment line doesn't have loc
+    else { //  for output,comment line doesn't have loc
       outputTokenList[sourceLineCount-1].loc = -1 ; // comment line doesn't have loc
     } // else
 
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                   x, addrMod, op1, op2 ) ;
   } // while
 
   outputTokenList[sourceLineCount].line = line ; // END
@@ -1043,27 +1081,34 @@ void Pass1XE( vector< vector<string> > sicTable, vector<Token> tokenTable,
 } // Pass1()
 
 void Pass2XE( vector<Token> tokenTable, map<string, int> symbolTable,
-            map<string, pair<string, int> > instructionSet, vector<OutputToken> &outputTokenList ) {
+              map<string, pair<string, int> > instructionSet, vector<OutputToken> &outputTokenList ) {
   int loc = 0, line = 0, sourceLineCount = 0 ;
   int begin = -1, end = -1 ;
   Token label, opcode, address ;
-  bool x = false ;
+  Token op1, op2 ;
+  bool x = false, e = false  ;
+  char addrMod = '\0' ;
+
   GetTokenLine( tokenTable, begin, end, line ) ;
-  ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+  ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                 x, addrMod, op1, op2 ) ;
+
   while ( outputTokenList[sourceLineCount].source == "" ) 
     sourceLineCount++ ;
   
   while ( opcode.tokenStr == "." ) { // Aa±??}AYaoμu﹐N 
     sourceLineCount++ ;
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                   x, addrMod, op1, op2 ) ;
   } // while
 
   if ( opcode.tokenStr == "START" ) {
     outputTokenList[sourceLineCount].machineCode = "" ;
     sourceLineCount++ ;
     GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                   x, addrMod, op1, op2 ) ;
   } // if
   
   while ( opcode.tokenStr != "END" ) { // §PA_|!§i|‥tokenTable[begin] != "END" 
@@ -1072,7 +1117,7 @@ void Pass2XE( vector<Token> tokenTable, map<string, int> symbolTable,
 
     if ( opcode.tokenStr != "." ) {
       if ( opcode.tokenStr != "" ) {
-        if ( opcode.tokenStr == "WORD" || opcode.tokenStr == "BYTE" ) {
+        if ( opcode.tokenStr == "WORD" || opcode.tokenStr == "BYTE" ) { // pseudo instruction
           // X'F1' or 3 or C'EOF'
           if ( address.tokenStr == "EOF" ) 
             outputTokenList[sourceLineCount].machineCode = "454F46" ;
@@ -1099,28 +1144,86 @@ void Pass2XE( vector<Token> tokenTable, map<string, int> symbolTable,
 		  } // else
 		} // if
 
-		else {
-		  string tempAddr ;
-		  if ( address.tokenStr != "" ) { // has operand
-		    if ( x ) 
-		      tempAddr = DecToHex( ( symbolTable.find( address.tokenStr ) -> second ) + 32768 ) ; // nibble
-			else {
-			  tempAddr = DecToHex( symbolTable.find( address.tokenStr ) -> second ) ;
-            } // else
-		  } // if 
-		  
-		  else { 
-		    cout << "error:line" << line << " undefine symbol\n" ;
-		    tempAddr = "0000" ;
-		  } // else
-		  
-          string tempListing ;
-          if ( opcode.type == 2 )
-            cout << "error:line" << line << " undefine symbol\n" ;
-          else
-		    tempListing = instructionSet.find( opcode.tokenStr ) -> second.first + tempAddr ;
+		else { // instruction 
+          int format = instructionSet.find( opcode.tokenStr ) -> second.second ;
+          if ( format == 1 ) { 
+	        outputTokenList[sourceLineCount].machineCode = instructionSet.find( opcode.tokenStr ) -> second.first ;
+          } // if
 
-		  outputTokenList[sourceLineCount].machineCode = tempListing ;
+          else if ( format == 2 ) {
+	        string assemblyLis, temp ;
+            stringstream ss ;
+            ss << op1.value ;
+            ss >> temp ;
+            assemblyLis = temp ;
+            ss << op2.value ;
+            ss >> temp ;
+            assemblyLis = assemblyLis + temp ;
+            assemblyLis = instructionSet.find( opcode.tokenStr ) -> second.first +
+                          assemblyLis ;
+            outputTokenList[sourceLineCount].machineCode = assemblyLis ;
+          } // else if
+
+          else { // format 3 or 4
+            string assemblyLis ;
+            int xbpe = 0 ;
+            if ( x )
+                xbpe += 8 ;
+
+            int opcodeDec = HexToDec( instructionSet.find( opcode.tokenStr ) -> second.first ) ;
+            if ( addrMod == '@' ) { // n = 1
+              opcodeDec += 2 ;
+            } // if
+
+            else if ( addrMod == '#' ) { // i = 1
+	          opcode += 1 ;
+            } // else if
+
+            else { // n = ,i = 1
+	          opcode += 3 ;
+            } // else
+
+            assemblyLis = DecToHex( opcodeDec ) ;
+            if ( e ) { // format4
+              int address ;
+
+              assemblyLis += DecToHex( xbpe ) ;
+              address = symbolTable.find( op1.tokenStr ) -> second ;
+              assemblyLis = assemblyLis + "0" + DecToHex( address ) ;
+            } // if
+
+            else { // handle b,p
+	          
+            } // else
+          } // else
+		  /* check instruction format
+                if ( format1 )
+                  write assembly listing
+                if ( format2 )
+                  write assembly listing
+                else ( format3 or 4 )
+                  6 bits opcode
+                  check @ to set n 
+                  check # to set i
+                  check x to set x
+                  check + to set e
+                  if ( !e ) format 3
+                    count disp
+                    if ( overflow )
+                      count disp( operand - Base )
+                      p = 0, b = 1 
+                      if ( TA overflow )
+                        error message
+                    else 
+                      p = 1, b = 0
+
+                    write assembly listing
+
+                  else // format 4
+                    b = 0, p = 0
+                    set address
+                    write assembly listing
+          */
 		} // else
 	  } // if
   
@@ -1134,7 +1237,8 @@ void Pass2XE( vector<Token> tokenTable, map<string, int> symbolTable,
     } // else
 
 	GetTokenLine( tokenTable, begin, end, line ) ;
-    ClassifyToken( tokenTable, begin, end, label, opcode, x, address ) ;
+    ClassifyToken( tokenTable, begin, end, label, opcode, e,
+                   x, addrMod, op1, op2 ) ;
     sourceLineCount++ ;
   } // while
   
